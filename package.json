@@ -10,8 +10,24 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@liveblocks/client": "^3.14.0",
+    "@liveblocks/react": "^3.14.0",
+    "@liveblocks/yjs": "^3.14.0",
+    "@supabase/supabase-js": "^2.97.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.2.0",
+    "@tiptap/extension-collaboration": "^3.20.0",
+    "@tiptap/extension-collaboration-caret": "^3.20.0",
+    "@tiptap/pm": "^3.20.0",
+    "@tiptap/react": "^3.20.0",
+    "@tiptap/starter-kit": "^3.20.0",
+    "html2pdf.js": "^0.14.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.0",
+    "tailwindcss": "^4.2.0",
+    "turndown": "^7.2.2",
+    "yjs": "^13.6.29"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -25,7 +41,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.48.0",
+    "typescript-eslint": "^8.14.0",
     "vite": "^7.3.1"
   }
 }
