@@ -1,35 +1,50 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
+import { Auth } from './components/Auth';
+import { Dashboard } from './components/Dashboard';
+import { DocumentRoom } from './components/DocumentRoom';
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+function PrivateRoute({ session, children }: { session: Session | null, children: React.ReactNode }) {
+  if (!session) return <div className="flex justify-center mt-10"><Auth /></div>;
+  return <>{children}</>;
 }
 
-export default App
+function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={!session ? <Auth /> : <Dashboard session={session} />} />
+        {/* Placeholder for Editor route */}
+        <Route path="/doc/:id" element={
+          <PrivateRoute session={session}>
+            {session && <DocumentRoom session={session} />}
+          </PrivateRoute>
+        } />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
