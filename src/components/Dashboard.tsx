@@ -4,11 +4,15 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Document } from '../types/supabase';
 import { FileText, Plus, LogOut, Trash2, Lock, Globe } from 'lucide-react';
+import { useAlert } from './AlertModal';
 
 export function Dashboard({ session }: { session: Session }) {
     const [docs, setDocs] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showUsernamePrompt, setShowUsernamePrompt] = useState(!session.user.user_metadata?.username);
+    const [newUsername, setNewUsername] = useState('');
     const navigate = useNavigate();
+    const { showConfirm, showAlert } = useAlert();
 
     useEffect(() => {
         fetchDocs();
@@ -51,16 +55,35 @@ export function Dashboard({ session }: { session: Session }) {
         }
     };
 
-    const deleteDoc = async (id: string, e: React.MouseEvent) => {
+    const deleteDoc = (id: string, e: React.MouseEvent) => {
         e.preventDefault(); // Prevent navigation
-        if (!confirm('Are you sure you want to delete this document?')) return;
+        showConfirm(
+            'Delete Document',
+            'Are you sure you want to delete this document?',
+            async () => {
+                try {
+                    const { error } = await supabase.from('documents').delete().eq('id', id);
+                    if (error) throw error;
+                    setDocs(docs.filter(d => d.id !== id));
+                    showAlert('Success', 'Document deleted', 'success');
+                } catch (error) {
+                    console.error('Error deleting doc:', error);
+                    showAlert('Error', 'Failed to delete document', 'error');
+                }
+            }
+        );
+    };
 
+    const handleSetUsername = async (e: React.FormEvent) => {
+        e.preventDefault();
         try {
-            const { error } = await supabase.from('documents').delete().eq('id', id);
+            const { error } = await supabase.auth.updateUser({ data: { username: newUsername } });
             if (error) throw error;
-            setDocs(docs.filter(d => d.id !== id));
+            setShowUsernamePrompt(false);
+            showAlert('Success', 'Username updated! It may take a moment to reflect.', 'success');
         } catch (error) {
-            console.error('Error deleting doc:', error);
+            console.error('Error setting username:', error);
+            showAlert('Error', 'Failed to update username.', 'error');
         }
     };
 
@@ -73,7 +96,7 @@ export function Dashboard({ session }: { session: Session }) {
                     <div className="flex items-center justify-between h-16">
                         <h1 className="text-xl font-bold text-gray-800">PlainDocSync</h1>
                         <div className="flex items-center gap-4">
-                            <span className="text-sm text-gray-500">{session.user.email}</span>
+                            <span className="text-sm font-medium text-gray-700">{session.user.user_metadata?.username || 'Anonymous User'}</span>
                             <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-600">
                                 <LogOut size={20} />
                             </button>
@@ -83,11 +106,33 @@ export function Dashboard({ session }: { session: Session }) {
             </nav>
 
             <main className="container px-4 py-8 mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                {(!session.user.user_metadata?.username && showUsernamePrompt) && (
+                    <div className="mb-8 bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex-1">
+                            <h3 className="font-bold text-blue-900 text-lg">Set your username</h3>
+                            <p className="text-sm text-blue-800 mt-1">You're currently appearing as <span className="font-semibold">"Anonymous User"</span> to others. Please set a username to better collaborate.</p>
+                        </div>
+                        <form className="flex gap-2 w-full md:w-auto" onSubmit={handleSetUsername}>
+                            <input
+                                type="text"
+                                placeholder="Enter Username"
+                                value={newUsername}
+                                onChange={e => setNewUsername(e.target.value)}
+                                className="px-4 py-2 border border-blue-200 rounded-lg flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-shadow"
+                                required
+                            />
+                            <button type="submit" disabled={!newUsername.trim()} className="px-5 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap shadow-sm transition-colors">
+                                Save
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                     <h2 className="text-2xl font-bold text-gray-800">Your Documents</h2>
                     <button
                         onClick={createDoc}
-                        className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                        className="flex items-center justify-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto"
                     >
                         <Plus size={20} />
                         New Document

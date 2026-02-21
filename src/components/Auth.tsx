@@ -1,21 +1,28 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAlert } from './AlertModal';
 
 export function Auth() {
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [sent, setSent] = useState(false);
+    const { showAlert } = useAlert();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        localStorage.setItem('pending_username', username);
         const { error } = await supabase.auth.signInWithOtp({
             email,
             options: {
+                data: {
+                    username,
+                },
                 emailRedirectTo: window.location.href,
             }
         });
-        if (error) alert(error.message);
+        if (error) showAlert('Error', error.message, 'error');
         else setSent(true);
         setLoading(false);
     };
@@ -34,6 +41,15 @@ export function Auth() {
                     </div>
                 ) : (
                     <form onSubmit={handleLogin} className="space-y-4">
+                        <input
+                            className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            type="text"
+                            placeholder="Your name"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            disabled={loading}
+                            required
+                        />
                         <input
                             className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                             type="email"
