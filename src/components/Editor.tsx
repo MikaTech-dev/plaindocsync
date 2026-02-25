@@ -1,14 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Collaboration from '@tiptap/extension-collaboration';
-import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
 import { useRoom } from "@liveblocks/react/suspense";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import * as Y from "yjs";
 import { supabase } from '../lib/supabase';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Globe, Lock, Menu, X, Link as LinkIcon, FileText, FileCode, Code, Bold, Italic, Strikethrough, List, ListOrdered, Quote, Pencil } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Globe, Lock, Menu, X, Link as LinkIcon, FileText, FileCode, Code, Pencil } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { ExportMenu } from './ExportMenu';
 import { useExport } from '../hooks/useExport';
@@ -156,38 +153,15 @@ function BaseEditor({ session, provider, ydoc }: { session: Session, provider: L
         };
     }, [provider, userName, userColor]);
 
-    // Initialize Editor
-    const editor = useEditor({
-        extensions: [
-            StarterKit.configure({
-                // For Tiptap v3, 'history' was renamed to 'undoRedo' in StarterKit options.
-                // Disable undo/redo in collaborative mode as Yjs handles it.
-                undoRedo: !provider ? undefined : false,
-            }),
-            // Register Collab extensions if provider exists
-            ...(provider && ydoc ? [
-                Collaboration.configure({
-                    document: ydoc,
-                }),
-                CollaborationCaret.configure({
-                    provider: provider,
-                    user: {
-                        name: userName,
-                        color: userColor,
-                    },
-                }),
-            ] : []),
-        ],
-        editorProps: {
-            attributes: {
-                class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[500px] outline-none',
-            },
-        },
-        onUpdate: ({ editor }) => {
-            // Save to Supabase (always, even if collaborating)
-            saveContent(editor.getJSON());
-        },
-    });
+    const [editor, setEditor] = useState<any>(null);
+    const [pendingContent, setPendingContent] = useState<any>(null);
+
+    useEffect(() => {
+        if (editor && pendingContent && !provider) {
+            editor.commands.setContent(pendingContent);
+            setPendingContent(null);
+        }
+    }, [editor, pendingContent, provider]);
 
     const { exportPDF, exportMarkdown, exportHTML } = useExport(editor, docTitle);
 
@@ -201,7 +175,11 @@ function BaseEditor({ session, provider, ydoc }: { session: Session, provider: L
                 setDocTitle(data.title);
                 setIsPublic(data.is_public);
                 if (data.content && !provider) { // Only set content if local
-                    editor.commands.setContent(data.content);
+                    if (editor) {
+                        editor.commands.setContent(data.content);
+                    } else {
+                        setPendingContent(data.content);
+                    }
                 }
             }
         } catch (error) {
@@ -221,11 +199,9 @@ function BaseEditor({ session, provider, ydoc }: { session: Session, provider: L
         setIsPublic(newVal);
     };
 
-    if (!editor) return null;
-
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10 w-full">
+        <div className="min-h-screen flex flex-col transition-colors duration-200" style={{ backgroundColor: 'var(--tt-bg-color)', color: 'var(--tt-theme-text)' }}>
+            <header className="border-b px-4 py-3 sticky top-0 z-10 w-full transition-colors duration-200" style={{ backgroundColor: 'var(--tt-bg-color)', borderColor: 'var(--tt-border-color)' }}>
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-2 sm:gap-4 overflow-hidden flex-1 mr-2">
                         <button onClick={() => navigate('/')} className="p-2 hover:bg-gray-100 rounded-full shrink-0">
@@ -236,11 +212,12 @@ function BaseEditor({ session, provider, ydoc }: { session: Session, provider: L
                                 value={docTitle}
                                 onChange={(e) => setDocTitle(e.target.value)}
                                 onBlur={() => supabase.from('documents').update({ title: docTitle }).eq('id', id!).then()}
-                                className="text-lg font-semibold bg-transparent border border-gray-200 sm:border-transparent hover:bg-gray-100 hover:border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-md px-2 py-1 min-w-0 w-full truncate transition-all cursor-text pr-8 sm:pr-2"
+                                className="text-lg font-semibold bg-transparent border border-transparent rounded-md px-2 py-1 min-w-0 w-full truncate transition-all cursor-text pr-8 focus:ring-2 focus:outline-none"
                                 placeholder="Untitled Document"
                                 title="Click to rename document"
+                                style={{ color: 'var(--tt-theme-text)' }}
                             />
-                            <Pencil size={14} className="absolute right-2 text-gray-400 pointer-events-none sm:hidden" />
+                            <Pencil size={14} className="absolute right-2 text-gray-400 pointer-events-none" />
                         </div>
                     </div>
 
@@ -310,7 +287,7 @@ function BaseEditor({ session, provider, ydoc }: { session: Session, provider: L
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
 
                         <div className="h-4 w-px bg-gray-300 mx-1" />
-                        <ExportMenu editor={editor} title={docTitle} />
+                        {editor && <ExportMenu editor={editor} title={docTitle} />}
                     </div>
                 </div>
             </header>
@@ -428,88 +405,20 @@ function BaseEditor({ session, provider, ydoc }: { session: Session, provider: L
                 </>
             )}
 
-            <main className="flex-1 overflow-y-auto w-full p-2 sm:p-4">
-                <div className="max-w-4xl mx-auto bg-white shadow-sm border border-gray-200 rounded-lg sm:mt-4 flex flex-col overflow-hidden">
-                    <MenuBar editor={editor} />
-                    <div className="p-4 sm:p-12 cursor-text min-h-[500px] sm:min-h-[800px]" onClick={() => editor?.commands.focus()}>
-                        <EditorContent editor={editor} />
-                    </div>
+            <main className="flex-1 overflow-y-auto w-full p-2 sm:p-4 transition-colors duration-200" style={{ backgroundColor: 'var(--tt-sidebar-bg-color)' }}>
+                <div className="max-w-4xl mx-auto shadow-sm border rounded-xl sm:mt-4 flex flex-col overflow-hidden min-h-[600px] sm:min-h-[800px] relative transition-colors duration-200" style={{ backgroundColor: 'var(--tt-card-bg-color)', borderColor: 'var(--tt-card-border-color)' }}>
+                    <SimpleEditor
+                        provider={provider}
+                        ydoc={ydoc}
+                        userName={userName}
+                        userColor={userColor}
+                        onUpdate={(e) => saveContent(e.getJSON())}
+                        onEditorReady={(e) => setEditor(e)}
+                    />
                 </div>
             </main>
         </div>
     );
 }
 
-function MenuBar({ editor }: { editor: any }) {
-    if (!editor) return null;
 
-    return (
-        <div className="flex flex-nowrap sm:flex-wrap items-center gap-1 p-2 bg-gray-50 border-b border-gray-200 w-full overflow-x-auto overflow-y-hidden sticky top-0 z-10 scrollbar-hide">
-            <button
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                disabled={!editor.can().chain().focus().toggleBold().run()}
-                className={`p-2 rounded shrink-0 transition-colors ${editor.isActive('bold') ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Bold"
-            >
-                <Bold size={16} />
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                disabled={!editor.can().chain().focus().toggleItalic().run()}
-                className={`p-2 rounded shrink-0 transition-colors ${editor.isActive('italic') ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Italic"
-            >
-                <Italic size={16} />
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleStrike().run()}
-                disabled={!editor.can().chain().focus().toggleStrike().run()}
-                className={`p-2 rounded shrink-0 transition-colors ${editor.isActive('strike') ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Strikethrough"
-            >
-                <Strikethrough size={16} />
-            </button>
-
-            <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
-
-            <button
-                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                className={`p-2 rounded font-bold text-sm shrink-0 transition-colors ${editor.isActive('heading', { level: 1 }) ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Heading 1"
-            >
-                H1
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                className={`p-2 rounded font-bold text-sm shrink-0 transition-colors ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Heading 2"
-            >
-                H2
-            </button>
-
-            <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
-
-            <button
-                onClick={() => editor.chain().focus().toggleBulletList().run()}
-                className={`p-2 rounded shrink-0 transition-colors ${editor.isActive('bulletList') ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Bullet List"
-            >
-                <List size={16} />
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                className={`p-2 rounded shrink-0 transition-colors ${editor.isActive('orderedList') ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Ordered List"
-            >
-                <ListOrdered size={16} />
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                className={`p-2 rounded shrink-0 transition-colors ${editor.isActive('blockquote') ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Blockquote"
-            >
-                <Quote size={16} />
-            </button>
-        </div>
-    );
-};
